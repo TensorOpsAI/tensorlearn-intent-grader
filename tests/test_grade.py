@@ -86,20 +86,20 @@ class RemoteTests(unittest.TestCase):
             self.tree.append({'path':name,'type':'blob','mode':'100644','sha':sha,'size':len(data)})
             self.blobs[sha]={'encoding':'base64','content':base64.b64encode(data).decode()}
         self.manifest={'CLAUDE.md':self.tree[1]['sha']}
-        self.pulls=[{'merged_at':'2026-10-20','merge_commit_sha':SHA,
+        self.pull={'number':7,'state':'open','merged_at':None,
                      'base':{'ref':'main','repo':{'full_name':self.repo}},
-                     'head':{'repo':{'full_name':self.repo}}}]
+                     'head':{'sha':SHA,'repo':{'full_name':self.repo}}}
     def api(self,path):
         if '/git/trees/' in path:return {'tree':self.tree,'truncated':False}
         if '/git/blobs/' in path:return self.blobs[path.rsplit('/',1)[1]]
-        if '/pulls?' in path:return self.pulls
+        if '/pulls/7' in path:return self.pull
         raise AssertionError(path)
     def read(self):
         with patch.object(runner,'api',self.api):
-            return runner.remote_documents(self.repo,SHA,SHA,self.manifest)
-    def test_merged_immutable_documents(self): self.assertEqual(self.read(),(GOOD,CLAUDE))
-    def test_push_without_merge_rejected(self):
-        self.pulls=[]
+            return runner.remote_documents(self.repo,SHA,SHA,self.manifest,7)
+    def test_open_pr_immutable_documents(self): self.assertEqual(self.read(),(GOOD,CLAUDE))
+    def test_closed_pr_rejected(self):
+        self.pull['state']='closed'
         with self.assertRaises(ValueError):self.read()
     def test_changed_starter_rejected(self):
         self.manifest['CLAUDE.md']='b'*40
@@ -110,11 +110,20 @@ class RemoteTests(unittest.TestCase):
     def test_symlink_rejected(self):
         self.tree[0]['mode']='120000'
         with self.assertRaises(ValueError):self.read()
-    def test_wrong_merged_commit_rejected(self):
-        self.pulls[0]['merge_commit_sha']='c'*40
+    def test_changed_pr_head_rejected(self):
+        self.pull['head']['sha']='c'*40
+        with self.assertRaises(ValueError):self.read()
+    def test_upstream_pr_rejected(self):
+        self.pull['base']['repo']['full_name']='upstream/starter'
+        with self.assertRaises(ValueError):self.read()
+    def test_foreign_pr_head_rejected(self):
+        self.pull['head']['repo']['full_name']='someone/another-fork'
+        with self.assertRaises(ValueError):self.read()
+    def test_wrong_pr_number_rejected(self):
+        self.pull['number']=8
         with self.assertRaises(ValueError):self.read()
     def test_network_failure_does_not_become_grade(self):
         with patch.object(runner,'api',side_effect=RuntimeError('transport')):
-            with self.assertRaises(RuntimeError):runner.remote_documents(self.repo,SHA,SHA,self.manifest)
+            with self.assertRaises(RuntimeError):runner.remote_documents(self.repo,SHA,SHA,self.manifest,7)
 
 if __name__=='__main__': unittest.main()

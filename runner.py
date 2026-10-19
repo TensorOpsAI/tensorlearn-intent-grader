@@ -17,13 +17,13 @@ def api(path):
 
 
 def caller_workflow(sha):
-    return ('name: Check intent submission\non:\n  push:\n    branches: [main]\n'
+    return ('name: Check intent submission\non:\n  pull_request:\n    types: [opened, synchronize, reopened]\n    branches: [main]\n'
             'permissions:\n  contents: read\n  pull-requests: read\njobs:\n  grade:\n'
             '    uses: TensorOpsAI/tensorlearn-intent-grader/.github/workflows/grade.yml@' + sha + '\n'
             '    with:\n      grader-sha: ' + sha + '\n')
 
 
-def remote_documents(repo, sha, grader_sha, manifest):
+def remote_documents(repo, sha, grader_sha, manifest, pr):
     tree = api(f'repos/{repo}/git/trees/{sha}?recursive=1')
     if tree.get('truncated') or len(tree.get('tree', [])) > 100:
         raise ValueError('submission tree limit')
@@ -52,14 +52,15 @@ def remote_documents(repo, sha, grader_sha, manifest):
         return data.decode('utf-8', errors='strict')
     if read('.github/workflows/grade.yml') != caller_workflow(grader_sha):
         raise ValueError('caller workflow changed')
-    # Require a merged, same-repository PR whose merge produced this exact revision.
-    pulls = api(f'repos/{repo}/commits/{sha}/pulls?per_page=100')
-    if not any(p.get('merged_at') and p.get('merge_commit_sha') == sha
-               and p.get('base', {}).get('ref') == 'main'
-               and p.get('base', {}).get('repo', {}).get('full_name', '').lower() == repo.lower()
-               and (p.get('head', {}).get('repo') or {}).get('full_name', '').lower() == repo.lower()
-               for p in pulls):
-        raise ValueError('no merged PR for this main commit')
+    # Read the exact open PR in the caller repo. Never grade an upstream/cross-repo PR.
+    pull = api(f'repos/{repo}/pulls/{pr}')
+    if not (pull.get('number') == pr and pull.get('state') == 'open'
+            and not pull.get('merged_at')
+            and pull.get('head', {}).get('sha') == sha
+            and pull.get('base', {}).get('ref') == 'main'
+            and (pull.get('base', {}).get('repo') or {}).get('full_name', '').lower() == repo.lower()
+            and (pull.get('head', {}).get('repo') or {}).get('full_name', '').lower() == repo.lower()):
+        raise ValueError('no matching open PR inside this repository')
     return read('intent.md'), read('CLAUDE.md')
 
 
@@ -69,8 +70,13 @@ def run():
         raise RuntimeError('invalid immutable revision')
     if not re.fullmatch(r'[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+', repo):
         raise RuntimeError('invalid repository')
+    if os.environ.get('SUBMISSION_EVENT') != 'pull_request':
+        raise RuntimeError('only pull-request checks are supported')
+    pr = int(os.environ['SUBMISSION_PR'])
+    if pr < 1:
+        raise RuntimeError('invalid PR number')
     try:
-        text, claude = remote_documents(repo, sha, grader_sha, MANIFEST)
+        text, claude = remote_documents(repo, sha, grader_sha, MANIFEST, pr)
         score, checks = report(text, claude, sha, grader_sha)
     except (ValueError, UnicodeError):
         score, checks = report('', '', sha, grader_sha, invalid=True)
@@ -80,7 +86,7 @@ def run():
     with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
         summary.write(f'# Intent document: {score["score"]}/100 ({score["status"]})\n\n')
         if not checks:
-            summary.write('Submission rejected: verify a merged PR, unchanged starter files, regular UTF-8 documents, and the size limit.\n')
+            summary.write('Submission rejected: verify a matching open PR in your own fork, unchanged starter files, regular UTF-8 documents, and the size limit.\n')
         for item in checks:
             summary.write(('- PASS: ' if item['passed'] else '- NEEDS WORK: ') + item['check'] + '\n')
         summary.write('\nThis is a document contract score. Server ingestion is a separate check.\n')

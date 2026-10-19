@@ -26,7 +26,9 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           SUBMISSION_REPO: ${{ github.repository }}
-          SUBMISSION_SHA: ${{ github.sha }}
+          SUBMISSION_SHA: ${{ github.event.pull_request.head.sha }}
+          SUBMISSION_PR: ${{ github.event.pull_request.number }}
+          SUBMISSION_EVENT: ${{ github.event_name }}
           GRADER_SHA: ${{ inputs.grader-sha }}
         run: |
 '''
