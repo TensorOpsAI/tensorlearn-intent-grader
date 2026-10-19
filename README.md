@@ -2,7 +2,7 @@
 
 Public, fictional training material for [the intent.md starter](https://github.com/TensorOpsAI/tensorlearn-intent-lab).
 The reusable workflow reads immutable GitHub blobs, checks the starter manifest,
-requires a merged same-repository PR into main, and grades intent.md as data.
+requires an open same-repository PR targeting main, and grades intent.md as data.
 It never checks out or executes participant code. No LLM, paid API or server secret
 is needed. GitHub Actions billing and quotas follow the repository owner's plan.
 
@@ -17,7 +17,7 @@ outputs; seven example categories. A known passing fictional document is provide
 in `fixtures/passing-intent.md` so the rubric is transparent.
 
 A score measures this contract, not semantic writing quality or Claude's compliance.
-An invalid file tree/encoding/size/merge is zero with status `invalid`. GitHub API or
+An invalid file tree/encoding/size/PR identity is zero with status `invalid`. GitHub API or
 transport failures fail the run without inventing a score. Protected files must
 match `manifest.json`; intent.md is limited to a regular UTF-8 file of 24 KiB.
 CSV cases are limited to 20, and repetition to 101 rows of a single-row input.
@@ -35,7 +35,7 @@ git diff --check
 ```
 
 Local CLI results are advisory: their revision fields are zero and they are never
-sent to the server. Remote source/merge tests mock the GitHub boundary; they do not
+sent to the server. Remote source/PR tests mock the GitHub boundary; they do not
 prove actual GitHub permissions or server ingestion.
 
 `build_workflow.py` embeds the trusted checker and manifest directly into the
@@ -46,23 +46,29 @@ Never trust an arbitrary caller-supplied revision as proof of grader identity.
 
 ## Rehearsal checklist
 
-1. Prepare an exercise record with the immutable starter and checker revisions,
-   `intent-md`, `intent-grade`, `intent-score`, and 100 points. Do not launch yet.
-2. Resolve submission compatibility: the currently observed platform expects a
-   private repository and explicit open-PR submission; the requested exercise uses
-   a public personal fork and merge as submission. This repository does not change
-   that platform behavior. No automatic official score is claimed until resolved.
-3. Enroll the actual test learner and approve the exact repository through the
-   platform. Check the required GitHub App installation and webhook/sweep setup.
-4. Fork the starter into a different personal account; enable Actions. Open in
-   Claude Code. Confirm the intent import and discuss a deliberately incomplete draft.
-5. Launch only when setup is ready. Merge the learner's own solution PR. Confirm
-   the Actions artifact contains the actual merged SHA and pinned grader SHA.
-6. Confirm the platform shows that same learner, attempt, commit, and score.
-   Improving the document should create a new submission, not overwrite history.
-7. Repeat with a complete document. Verify a direct push is rejected by this
-   checker, and a run replay does not duplicate the official score.
+1. Prepare the exercise record with immutable starter/checker revisions, `intent-md`,
+   `intent-grade`, `intent-score`, and 100 points. Confirm the deployed platform
+   supports approved public repositories and `pull_request` scoring evidence, and
+   serves client v0.5.1 or later. These changes must be deployed before this works.
+2. Enroll one test learner and approve that person's fork. Install the GitHub App
+   only on the exercise repository and approve its installation for the organization.
+   Verify webhook/sweep delivery, configure the grading allowance, then launch.
+3. Enable Actions in the fork. Connect Claude Code using the lab's `--code` command,
+   and use `/load`. Write intent.md on a solution branch and push it.
+4. Open a PR inside the learner fork, targeting its main. Opening, reopening or
+   updating the PR starts checks. The grader uses `github.event.pull_request.head.sha`,
+   not `github.sha` (the synthetic merge preview for PR events). The PR remains open.
+5. Inspect the artifact and then `/submit` the exact pushed head. An earlier advisory
+   run may be reprocessed by the server sweep; the check itself creates no attempt.
+6. Use `/check` and the website to verify the same learner, PR head, and official
+   score. A new answer requires another commit/push and explicit submission.
+7. Repeat with complete and incomplete documents. Verify an upstream-targeting PR
+   is rejected, and check/result replays do not duplicate the official score.
 
-The full rehearsal remains unrun. No real learner enrollment, connection tokens,
-App installation, or server writes are exercised by these unit tests. Customer
+Tests mock the GitHub boundary and do not prove production permissions. Full learner
+Claude onboarding, App delivery and a saved official result must be observed during
+rehearsal; do not claim them from unit tests or from a green Actions check. Customer
 workshop IDs, accounts, and credentials stay outside these public repositories.
+
+See [GitHub's PR event documentation](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#pull_request)
+for the distinction between the PR head and the synthetic merge commit.
