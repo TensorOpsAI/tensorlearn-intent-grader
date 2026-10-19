@@ -1,0 +1,10 @@
+{
+  ".gitignore": "1d825c27711bf4dbc3566886d56bfe1f0b3b30ec",
+  "CLAUDE.md": "7fd31803d87c2418617f6516610742f57e472b14",
+  "README.md": "7d35a201565acc55ebcbd7234e3d74a257a59269",
+  "docs/product-brief.md": "155581e8bffc457ec2249257230442df942e705e",
+  "fixtures/sample.csv": "961ca0b5cdf04a40ceb47bbca983dc553733c75e",
+  "package.json": "842be2aa26c92efc3f4aaf4828d133d6491593c5",
+  "src/tickets.mjs": "dde96a94663a65f0e14547558747a1c3e5109baa",
+  "tests/tickets.test.mjs": "cae4a4c26a811392c784d6e0389e16eff9ebcd8e"
+}
