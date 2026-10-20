@@ -49,12 +49,14 @@ Never trust an arbitrary caller-supplied revision as proof of grader identity.
 1. Prepare the exercise record with immutable starter/checker revisions, `intent-md`,
    `intent-grade`, `intent-score`, and 100 points. Confirm the deployed platform
    supports approved public repositories and `pull_request` scoring evidence, and
-   serves client v0.5.1 or later. These changes must be deployed before this works.
-2. Enroll one test learner and approve that person's fork. Install the GitHub App
-   only on the exercise repository and approve its installation for the organization.
-   Verify webhook/sweep delivery, configure the grading allowance, then launch.
+   serves client v0.5.2 or later. These changes must be deployed before this works.
+2. Enroll one test learner. They fork the shared starter and install the GitHub App
+   on their exercise repository through the lab page. No per-student instructor
+   repository setup or approval is needed for a public starter fork. Verify webhook
+   and sweep delivery, configure the grading allowance, then launch.
 3. Enable Actions in the fork. Connect Claude Code using the lab's `--code` command,
-   and use `/load`. Write intent.md on a solution branch and push it.
+   and use `/load` from that fork to prove write control and connect it. Write intent.md
+   on a solution branch and push it.
 4. Open a PR inside the learner fork, targeting its main. Opening, reopening or
    updating the PR starts checks. The grader uses `github.event.pull_request.head.sha`,
    not `github.sha` (the synthetic merge preview for PR events). The PR remains open.
