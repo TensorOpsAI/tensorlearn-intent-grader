@@ -18,7 +18,7 @@ def api(path):
 
 def caller_workflow(sha):
     return ('name: Check intent submission\non:\n  pull_request:\n    types: [opened, synchronize, reopened]\n    branches: [main]\n'
-            'permissions:\n  contents: read\n  pull-requests: read\njobs:\n  grade:\n'
+            'permissions:\n  contents: read\n  pull-requests: read\n  id-token: write\njobs:\n  grade:\n'
             '    uses: TensorOpsAI/tensorlearn-intent-grader/.github/workflows/grade.yml@' + sha + '\n'
             '    with:\n      grader-sha: ' + sha + '\n')
 

@@ -31,13 +31,13 @@ jobs:
           import json
           import re
           from pathlib import Path
-          
+
           MAX_BYTES = 24576
           NAMES = ['Goal', 'Scope', 'Constraints', 'Plan', 'Acceptance', 'Verification']
           CATEGORIES = ['explicit-priority', 'default-priority', 'quoted-comma', 'empty-title',
                         'unknown-column', 'invalid-priority', 'row-limit']
-          
-          
+
+
           def predict(case):
               if not isinstance(case, dict) or set(case) - {'csv', 'expected', 'repeat'}:
                   raise ValueError('case shape')
@@ -73,8 +73,8 @@ jobs:
                       tags.add('quoted-comma')
                   tickets.append({'title': values['title'], 'priority': priority or 'normal'})
               return {'tickets': tickets}, tags
-          
-          
+
+
           def no_duplicate_keys(pairs):
               result = {}
               for key, value in pairs:
@@ -82,8 +82,8 @@ jobs:
                       raise ValueError('duplicate JSON key')
                   result[key] = value
               return result
-          
-          
+
+
           def check(text, claude):
               prose = re.sub(r'^```[^\n]*\n.*?^```\s*$', '', text, flags=re.M | re.S)
               sections = re.findall(r'^## (Goal|Scope|Constraints|Plan|Acceptance|Verification)\s*\n(.*?)(?=^## |\Z)', prose, re.M | re.S)
@@ -140,8 +140,8 @@ jobs:
               for category in CATEGORIES:
                   add('Example: ' + category, category in covered)
               return results
-          
-          
+
+
           def report(text, claude, submission_sha, grader_sha, invalid=False):
               results = check(text, claude) if not invalid else []
               passed = sum(item['passed'] for item in results)
@@ -151,24 +151,24 @@ jobs:
                       'score': score, 'max': 100,
                       'points': {'scope': 0, 'static': 0, 'tests': score, 'regression': 0},
                       'gates': {'tests': {'total': 20, 'passed': passed}}}, results
-          
-          
+
+
           def read_document(path):
               path = Path(path)
               if path.is_symlink() or not path.is_file() or path.stat().st_size > MAX_BYTES:
                   raise ValueError('document must be a regular file no larger than 24 KiB')
               return path.read_bytes().decode('utf-8', errors='strict')
-          
-          
-          
+
+
+
           MANIFEST = {'.gitignore': '1d825c27711bf4dbc3566886d56bfe1f0b3b30ec', 'CLAUDE.md': '40fef0245898500cb693485649e73e0eea811844', 'README.md': '3a1dd680186a69c48ff92ea63eb89fbf4577fb72', 'docs/product-brief.md': '155581e8bffc457ec2249257230442df942e705e', 'fixtures/sample.csv': '961ca0b5cdf04a40ceb47bbca983dc553733c75e', 'package.json': '842be2aa26c92efc3f4aaf4828d133d6491593c5', 'src/tickets.mjs': 'dde96a94663a65f0e14547558747a1c3e5109baa', 'tests/tickets.test.mjs': 'cae4a4c26a811392c784d6e0389e16eff9ebcd8e'}
           """GitHub runner entrypoint; fetch only immutable blobs, never checkout candidate code."""
           import base64
           import hashlib
           import os
           import urllib.request
-          
-          
+
+
           def api(path):
               req = urllib.request.Request('https://api.github.com/' + path, headers={
                   'Authorization': 'Bearer ' + os.environ['GITHUB_TOKEN'],
@@ -178,15 +178,15 @@ jobs:
                   if len(raw) > 1048576:
                       raise RuntimeError('GitHub response limit')
                   return json.loads(raw)
-          
-          
+
+
           def caller_workflow(sha):
               return ('name: Check intent submission\non:\n  pull_request:\n    types: [opened, synchronize, reopened]\n    branches: [main]\n'
-                      'permissions:\n  contents: read\n  pull-requests: read\njobs:\n  grade:\n'
+                      'permissions:\n  contents: read\n  pull-requests: read\n  id-token: write\njobs:\n  grade:\n'
                       '    uses: TensorOpsAI/tensorlearn-intent-grader/.github/workflows/grade.yml@' + sha + '\n'
                       '    with:\n      grader-sha: ' + sha + '\n')
-          
-          
+
+
           def remote_documents(repo, sha, grader_sha, manifest, pr):
               tree = api(f'repos/{repo}/git/trees/{sha}?recursive=1')
               if tree.get('truncated') or len(tree.get('tree', [])) > 100:
@@ -226,8 +226,8 @@ jobs:
                       and (pull.get('head', {}).get('repo') or {}).get('full_name', '').lower() == repo.lower()):
                   raise ValueError('no matching open PR inside this repository')
               return read('intent.md'), read('CLAUDE.md')
-          
-          
+
+
           def run():
               sha, grader_sha, repo = os.environ['SUBMISSION_SHA'], os.environ['GRADER_SHA'], os.environ['SUBMISSION_REPO']
               if not re.fullmatch('[a-f0-9]{40}', sha) or not re.fullmatch('[a-f0-9]{40}', grader_sha):
@@ -254,8 +254,8 @@ jobs:
                   for item in checks:
                       summary.write(('- PASS: ' if item['passed'] else '- NEEDS WORK: ') + item['check'] + '\n')
                   summary.write('\nThis is a document contract score. Server ingestion is a separate check.\n')
-          
-          
+
+
           if __name__ == '__main__':
               run()
       - name: Upload score
@@ -267,22 +267,67 @@ jobs:
           retention-days: 7
       - name: Report score to TensorLearn
         continue-on-error: true
-        env:
-          REPORT_URL: https://tensorops.ai/api/github/report
-          AUDIENCE: https://tensorops.ai/code-labs
+        shell: python
         run: |
-          token=$(curl -sSf -H "Authorization: Bearer $ACTIONS_ID_TOKEN_REQUEST_TOKEN" \
-            "$ACTIONS_ID_TOKEN_REQUEST_URL&audience=$AUDIENCE" | jq -r .value)
-          echo "::add-mask::$token"
-          for wait in 2 4 8 16 32; do
-            status=$(curl -sS -o "$RUNNER_TEMP/report.txt" -w '%{http_code}' -X POST "$REPORT_URL" \
-              -H "Authorization: Bearer $token" -H 'Content-Type: application/json' \
-              --data-binary @result/score.json || echo 000)
-            echo "report: HTTP $status $(cat "$RUNNER_TEMP/report.txt")"
-            case "$status" in
-              2*) exit 0 ;;
-              429|5*|000) sleep "$wait" ;;
-              *) exit 1 ;;
-            esac
-          done
-          exit 1
+          """Report protected grader output; learner files are never imported or executed."""
+          import json
+          import os
+          import time
+          import urllib.error
+          import urllib.parse
+          import urllib.request
+          from pathlib import Path
+
+          REPORT_URL = 'https://tensorops.ai/api/github/report'
+          AUDIENCE = 'https://tensorops.ai/code-labs'
+
+
+          class NoRedirect(urllib.request.HTTPRedirectHandler):
+              def redirect_request(self, req, fp, code, msg, headers, newurl):
+                  return None
+
+
+          def deliver(score, token, open_request, sleep=time.sleep):
+              for attempt in range(5):
+                  request = urllib.request.Request(REPORT_URL, data=score, method='POST', headers={
+                      'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json'})
+                  try:
+                      with open_request(request, timeout=15) as response:
+                          status = response.status
+                  except urllib.error.HTTPError as error:
+                      status = error.code
+                      error.close()
+                  except (urllib.error.URLError, TimeoutError, OSError):
+                      status = 0
+                  print('report: HTTP ' + str(status))
+                  if 200 <= status < 300:
+                      return
+                  if status not in (0, 429) and not 500 <= status < 600:
+                      raise RuntimeError('Score report rejected: HTTP ' + str(status))
+                  if attempt < 4:
+                      sleep(2 ** (attempt + 1))
+              raise RuntimeError('Score report retries exhausted; artifact recovery remains available')
+
+
+          def main():
+              score = Path('result/score.json').read_bytes()
+              if not score or len(score) > 65536:
+                  raise RuntimeError('Invalid protected score size')
+              opener = urllib.request.build_opener(NoRedirect())
+              url = os.environ['ACTIONS_ID_TOKEN_REQUEST_URL']
+              separator = '&' if '?' in url else '?'
+              request = urllib.request.Request(url + separator + urllib.parse.urlencode({'audience': AUDIENCE}),
+                  headers={'Authorization': 'Bearer ' + os.environ['ACTIONS_ID_TOKEN_REQUEST_TOKEN']})
+              with opener.open(request, timeout=15) as response:
+                  raw = response.read(65537)
+              if len(raw) > 65536:
+                  raise RuntimeError('OIDC response too large')
+              token = json.loads(raw).get('value')
+              if not isinstance(token, str) or not token or len(token) > 16384:
+                  raise RuntimeError('OIDC response has no valid token')
+              print('::add-mask::' + token)
+              deliver(score, token, opener.open)
+
+
+          if __name__ == '__main__':
+              main()
